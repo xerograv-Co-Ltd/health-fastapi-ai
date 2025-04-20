@@ -1,7 +1,7 @@
 # test_request.py
 import requests
 
-url = "https://fastapi-analyze-api-production.up.railway.app/analyze"
+url = "https://health-fastapi-ai-production.up.railway.app/analyze"
 data = {
     "heart_rate": 84,
     "skin_temp": 33.2,

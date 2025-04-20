@@ -16,7 +16,7 @@ def analyze(data: InputData):
     if score > 60:
         product = "Take a rest and stop activity"
     elif score > 40:
-        product = "Change safer plan"
+        product = "Change to safer plan"
     else:
         product = "Keep your safety plan"
     return {"recommendedProduct": product, "stressScore": round(score, 2)}
