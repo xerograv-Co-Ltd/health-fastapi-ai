@@ -36,7 +36,10 @@ def analyze_batch(batch: DiveBatchRequest):
     engine = RuleBasedEngine()
     results = []
 
-    try:
+ try:
+        engine = RuleBasedEngine()
+        results = []
+
         for sample in batch.samples:
             max_pctM = max((t.pctM for t in sample.tissues), default=0.0)
             result = engine.evaluate(sample.depthM, sample.hr, max_pctM)
@@ -56,20 +59,19 @@ def analyze_batch(batch: DiveBatchRequest):
                 "risk_score": result["stressScore"]
             })
 
-        print("✅ Analysis complete. Returning result.")
         return {
             "uid": batch.uid,
             "session_id": batch.session_id,
             "results": results
         }
-    
-    except Exception as e:
-        print("❌ Error during analysis:", str(e))
-        return {
-            "status": "error",
-            "message": str(e)
-        }
 
+    except Exception as e:
+        return {
+            "uid": batch.uid,
+            "session_id": batch.session_id,
+            "results": [],
+            "error": str(e)
+        }
 
 @app.post("/predict_batch")
 def predict_batch(batch: DiveBatchRequest):
