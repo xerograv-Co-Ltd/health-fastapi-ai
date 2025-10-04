@@ -37,33 +37,33 @@ def analyze_batch(batch: DiveBatchRequest):
     results = []
 
  try:
-        engine = RuleBasedEngine()
-        results = []
+    engine = RuleBasedEngine()
+    results = []
 
-        for sample in batch.samples:
-            max_pctM = max((t.pctM for t in sample.tissues), default=0.0)
-            result = engine.evaluate(sample.depthM, sample.hr, max_pctM)
+    for sample in batch.samples:
+        max_pctM = max((t.pctM for t in sample.tissues), default=0.0)
+        result = engine.evaluate(sample.depthM, sample.hr, max_pctM)
 
-            append_to_csv_log({
-                "timestamp": datetime.utcnow().isoformat(),
-                "heart_rate": sample.hr or 0,
-                "oxygen_saturation": None,
-                "temperature": None,
-                "depth": sample.depthM or 0.0,
-                "max_percent_m": max_pctM
-            }, result)
+        append_to_csv_log({
+            "timestamp": datetime.utcnow().isoformat(),
+            "heart_rate": sample.hr or 0,
+            "oxygen_saturation": None,
+            "temperature": None,
+            "depth": sample.depthM or 0.0,
+            "max_percent_m": max_pctM
+        }, result)
 
-            results.append({
-                "elapsed_sec": sample.t,
-                "risk_level": result["riskLevel"],
-                "risk_score": result["stressScore"]
-            })
+        results.append({
+            "elapsed_sec": sample.t,
+            "risk_level": result["riskLevel"],
+            "risk_score": result["stressScore"]
+        })
 
-        return {
-            "uid": batch.uid,
-            "session_id": batch.session_id,
-            "results": results
-        }
+    return {
+        "uid": batch.uid,
+        "session_id": batch.session_id,
+        "results": results
+    }
 
     except Exception as e:
         return {
