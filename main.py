@@ -30,33 +30,46 @@ class DiveBatchRequest(BaseModel):
 # --- エンドポイント ---
 @app.post("/analyze_batch")
 def analyze_batch(batch: DiveBatchRequest):
+    print("📥 Received analyze_batch request")
+    print(f"UID: {batch.uid}, Session: {batch.session_id}, Samples: {len(batch.samples)}")
+    
     engine = RuleBasedEngine()
     results = []
 
-    for sample in batch.samples:
-        max_pctM = max((t.pctM for t in sample.tissues), default=0.0)
-        result = engine.evaluate(sample.depthM, sample.hr, max_pctM)
+    try:
+        for sample in batch.samples:
+            max_pctM = max((t.pctM for t in sample.tissues), default=0.0)
+            result = engine.evaluate(sample.depthM, sample.hr, max_pctM)
 
-        append_to_csv_log({
-            "timestamp": datetime.utcnow().isoformat(),
-            "heart_rate": sample.hr or 0,
-            "oxygen_saturation": None,  # 未取得のため
-            "temperature": None,
-            "depth": sample.depthM or 0.0,
-            "max_percent_m": max_pctM
-        }, result)
+            append_to_csv_log({
+                "timestamp": datetime.utcnow().isoformat(),
+                "heart_rate": sample.hr or 0,
+                "oxygen_saturation": None,
+                "temperature": None,
+                "depth": sample.depthM or 0.0,
+                "max_percent_m": max_pctM
+            }, result)
 
-        results.append({
-            "elapsed_sec": sample.t,
-            "risk_level": result["riskLevel"],
-            "risk_score": result["stressScore"]
-        })
+            results.append({
+                "elapsed_sec": sample.t,
+                "risk_level": result["riskLevel"],
+                "risk_score": result["stressScore"]
+            })
 
-    return {
-        "uid": batch.uid,
-        "session_id": batch.session_id,
-        "results": results
-    }
+        print("✅ Analysis complete. Returning result.")
+        return {
+            "uid": batch.uid,
+            "session_id": batch.session_id,
+            "results": results
+        }
+    
+    except Exception as e:
+        print("❌ Error during analysis:", str(e))
+        return {
+            "status": "error",
+            "message": str(e)
+        }
+
 
 @app.post("/predict_batch")
 def predict_batch(batch: DiveBatchRequest):
