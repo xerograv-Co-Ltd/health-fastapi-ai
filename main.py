@@ -16,11 +16,11 @@ class DCTissueSnapshot(BaseModel):
     pctM: float
 
 class DiveComputerSample(BaseModel):
-    id: str
+    id: Optional[str] = None
     t: int
-    depthM: Optional[float]
-    hr: Optional[int]
-    tissues: List[DCTissueSnapshot]
+    depthM: Optional[float] = None
+    hr: Optional[int] = None
+    tissues: Optional[List[DCTissueSnapshot]] = []
 
 class DiveBatchRequest(BaseModel):
     uid: str
