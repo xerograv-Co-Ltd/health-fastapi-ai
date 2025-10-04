@@ -1,53 +1,86 @@
 from fastapi import FastAPI
 from pydantic import BaseModel
+from typing import List, Optional
+from datetime import datetime
+from models.rule_based_engine import RuleBasedEngine
+from storage.csv_logger import append_to_csv_log
+from models.predict_engine import PredictEngine
 
 app = FastAPI()
 
-class InputData(BaseModel):
-    heart_rate: float
-    skin_temp: float
-    uv_index: float  # unused but included
-    pm25: float      # unused but included
-    humidity: float  # unused but included
-    oxygen_saturation: float
-    activity_level: float
+# --- DiveComputerSample構成 ---
+class DCTissueSnapshot(BaseModel):
+    i: int
+    p: float
+    pctM: float
 
-@app.post("/analyze")
-def analyze(data: InputData):
-    # 各要因ごとのスコア
-    oxygen_risk = (100 - data.oxygen_saturation) * 0.5
-    heart_risk = data.heart_rate * 0.3
-    temp_risk = abs(data.skin_temp - 36.5) * 0.1  # 理想値36.5℃からの逸脱
-    activity_risk = data.activity_level * 0.1
+class DiveComputerSample(BaseModel):
+    id: str
+    t: int
+    depthM: Optional[float]
+    hr: Optional[int]
+    tissues: List[DCTissueSnapshot]
 
-    total_score = oxygen_risk + heart_risk + temp_risk + activity_risk
+class DiveBatchRequest(BaseModel):
+    uid: str
+    session_id: str
+    samples: List[DiveComputerSample]
 
-    # 推奨ロジックとリスク判定
-    if data.oxygen_saturation < 90:
-        recommendation = "🛑 Dangerously low oxygen level. Surface immediately and seek medical attention."
-        risk_level = "Critical"
-    elif data.heart_rate > 110 and data.oxygen_saturation < 95:
-        recommendation = "⚠️ Possible hypoxia. Stop activity and rest."
-        risk_level = "High"
-    elif data.skin_temp < 32:
-        recommendation = "🥶 Risk of hypothermia. Exit water and warm up."
-        risk_level = "High"
-    elif total_score > 70:
-        recommendation = "🚨 High stress detected. Rest immediately."
-        risk_level = "High"
-    elif total_score > 50:
-        recommendation = "⚠️ Moderate stress. Monitor and reduce activity."
-        risk_level = "Moderate"
-    else:
-        recommendation = "✅ Vitals stable. Continue with caution."
-        risk_level = "Low"
+# --- エンドポイント ---
+@app.post("/analyze_batch")
+def analyze_batch(batch: DiveBatchRequest):
+    engine = RuleBasedEngine()
+    results = []
+
+    for sample in batch.samples:
+        max_pctM = max((t.pctM for t in sample.tissues), default=0.0)
+        result = engine.evaluate(sample.depthM, sample.hr, max_pctM)
+
+        append_to_csv_log({
+            "timestamp": datetime.utcnow().isoformat(),
+            "heart_rate": sample.hr or 0,
+            "oxygen_saturation": None,  # 未取得のため
+            "temperature": None,
+            "depth": sample.depthM or 0.0,
+            "max_percent_m": max_pctM
+        }, result)
+
+        results.append({
+            "elapsed_sec": sample.t,
+            "risk_level": result["riskLevel"],
+            "risk_score": result["stressScore"]
+        })
 
     return {
-        "stressScore": round(total_score, 2),
-        "riskLevel": risk_level,
-        "oxygenRisk": round(oxygen_risk, 2),
-        "heartRisk": round(heart_risk, 2),
-        "temperatureRisk": round(temp_risk, 2),
-        "activityRisk": round(activity_risk, 2),
-        "recommendedProduct": recommendation
+        "uid": batch.uid,
+        "session_id": batch.session_id,
+        "results": results
+    }
+
+@app.post("/predict_batch")
+def predict_batch(batch: DiveBatchRequest):
+    results = []
+
+    for sample in batch.samples:
+        max_pctM = max((t.pctM for t in sample.tissues), default=0.0)
+
+        # ML予測
+        pred = predictor.predict(
+            heart_rate=sample.hr,
+            oxygen_saturation=None,  # 現時点では無し
+            temperature=None,
+            depth=sample.depthM,
+            max_percent_m=max_pctM
+        )
+
+        results.append({
+            "elapsed_sec": sample.t,
+            "predicted_label": pred["label"],
+            "confidence": pred["confidence"]
+        })
+
+    return {
+        "uid": batch.uid,
+        "session_id": batch.session_id,
+        "results": results
     }
