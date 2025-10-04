@@ -10,7 +10,6 @@ env/
 ENV/
 
 # model / data
-risk_model.pkl
 *.csv
 
 # macOS
