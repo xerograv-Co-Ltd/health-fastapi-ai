@@ -5,6 +5,7 @@ from datetime import datetime
 from models.rule_based_engine import RuleBasedEngine
 from storage.csv_logger import append_to_csv_log
 from models.predict_engine import PredictEngine
+predictor = PredictEngine() 
 
 app = FastAPI()
 
