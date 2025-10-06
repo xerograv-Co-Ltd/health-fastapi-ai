@@ -1,22 +1,34 @@
+from firebase_admin import credentials, firestore, initialize_app
 import pandas as pd
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.model_selection import train_test_split
-import joblib
 
-# 明示的にカンマ区切り（必要に応じて修正）
-df = pd.read_csv("data/poc_divelog.csv", sep=",", engine="python")
+# Firebase初期化
+cred = credentials.Certificate("serviceAccountKey.json")
+initialize_app(cred)
+db = firestore.client()
 
-# 列名が正しいかチェック
-print("📊 Columns:", df.columns.tolist())
+# DiveSessionデータ取得
+sessions_ref = db.collection_group("divesessions")
+docs = sessions_ref.stream()
 
-# label列が存在するか確認し、フィルタリング
-if "label" not in df.columns:
-    raise ValueError("❌ 'label' column not found in CSV")
+rows = []
+for doc in docs:
+    data = doc.to_dict()
+    if data.get("labelSource") != "manual":
+        continue
+    for s in data.get("dcSamplesInline", []):
+        max_pct = max([t.get("pctM", 0.0) for t in s.get("tissues", [])])
+        rows.append({
+            "heart_rate": s.get("hr"),
+            "depth": s.get("depthM"),
+            "max_percent_m": max_pct,
+            "label": data.get("riskLevel")
+        })
 
-df = df[df["label"].notnull() & (df["label"] != "")]
+df = pd.DataFrame(rows)
+df.dropna(inplace=True)
 
-# 特徴量と目的変数
-X = df[["heart_rate", "oxygen_saturation", "temperature", "depth", "max_percent_m"]].fillna(0)
+# 特徴量とターゲット分離
+X = df[["heart_rate", "depth", "max_percent_m"]]
 y = df["label"]
 
 # データ分割
@@ -26,10 +38,11 @@ X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_
 model = RandomForestClassifier(n_estimators=100, random_state=42)
 model.fit(X_train, y_train)
 
-# 精度確認
-print("✅ Train accuracy:", model.score(X_train, y_train))
-print("✅ Test accuracy:", model.score(X_test, y_test))
+# 評価出力
+y_pred = model.predict(X_test)
+print("✅ Accuracy:", accuracy_score(y_test, y_pred))
+print("📊 Classification Report:\n", classification_report(y_test, y_pred))
 
-# モデル保存
-joblib.dump(model, "risk_model.pkl")
-print("📦 Model saved to risk_model.pkl")
+# 保存
+joblib.dump(model, args.output)
+print(f"✅ Model saved to {args.output}")

@@ -87,14 +87,42 @@ def predict_batch(batch: DiveBatchRequest):
             max_percent_m=max_pctM
         )
 
+        predicted_labels.append(pred["label"])
         results.append({
             "elapsed_sec": sample.t,
             "predicted_label": pred["label"],
             "confidence": pred["confidence"]
         })
 
+    def compute_overall_risk_label(predicted_labels):
+    if "high" in predicted_labels:
+        return "high"
+    elif "medium" in predicted_labels:
+        return "medium"
+    else:
+        return "low"
+
+@app.post("/predict_batch")
+async def predict_batch(request: DiveBatchRequest):
+    # 予測処理省略...
+    predicted = model.predict(X)
+    confidences = model.predict_proba(X).max(axis=1)
+
+    results = [
+        DiveBatchResult(
+            elapsed_sec=s["t"],
+            predicted_label=pred,
+            confidence=float(conf)
+        )
+        for s, pred, conf in zip(samples, predicted, confidences)
+    ]
+
+    # 👇 追加部分
+    overall_label = compute_overall_risk_label(predicted.tolist())
+
     return {
-        "uid": batch.uid,
-        "session_id": batch.session_id,
-        "results": results
+        "uid": request.uid,
+        "session_id": request.session_id,
+        "results": results,
+        "overall_risk_level": overall_label   # ✅ 新たに含める
     }
