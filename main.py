@@ -3,7 +3,6 @@ from pydantic import BaseModel
 from typing import List, Optional
 from datetime import datetime
 from models.rule_based_engine import RuleBasedEngine
-from storage.csv_logger import append_to_csv_log
 from models.predict_engine import PredictEngine
 
 predictor = PredictEngine()
@@ -40,15 +39,6 @@ def analyze_batch(batch: DiveBatchRequest):
         for sample in batch.samples:
             max_pctM = max((t.pctM for t in sample.tissues or []), default=0.0)
             result = engine.evaluate(sample.depthM, sample.hr, max_pctM)
-
-            append_to_csv_log({
-                "timestamp": datetime.utcnow().isoformat(),
-                "heart_rate": sample.hr or 0,
-                "oxygen_saturation": None,
-                "temperature": None,
-                "depth": sample.depthM or 0.0,
-                "max_percent_m": max_pctM
-            }, result)
 
             results.append({
                 "elapsed_sec": sample.t,
