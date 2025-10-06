@@ -74,11 +74,11 @@ def analyze_batch(batch: DiveBatchRequest):
 @app.post("/predict_batch")
 def predict_batch(batch: DiveBatchRequest):
     results = []
+    predicted_labels = []
 
     for sample in batch.samples:
         max_pctM = max((t.pctM for t in sample.tissues or []), default=0.0)
 
-        # ML予測
         pred = predictor.predict(
             heart_rate=sample.hr,
             oxygen_saturation=None,
@@ -88,41 +88,27 @@ def predict_batch(batch: DiveBatchRequest):
         )
 
         predicted_labels.append(pred["label"])
+
         results.append({
             "elapsed_sec": sample.t,
             "predicted_label": pred["label"],
             "confidence": pred["confidence"]
         })
 
-    def compute_overall_risk_label(predicted_labels):
-    if "high" in predicted_labels:
-        return "high"
-    elif "medium" in predicted_labels:
-        return "medium"
-    else:
-        return "low"
+    # 🔽 全体のリスクレベルを算出
+    def compute_overall_risk_label(labels: List[str]) -> str:
+        if "high" in labels:
+            return "high"
+        elif "medium" in labels:
+            return "medium"
+        else:
+            return "low"
 
-@app.post("/predict_batch")
-async def predict_batch(request: DiveBatchRequest):
-    # 予測処理省略...
-    predicted = model.predict(X)
-    confidences = model.predict_proba(X).max(axis=1)
-
-    results = [
-        DiveBatchResult(
-            elapsed_sec=s["t"],
-            predicted_label=pred,
-            confidence=float(conf)
-        )
-        for s, pred, conf in zip(samples, predicted, confidences)
-    ]
-
-    # 👇 追加部分
-    overall_label = compute_overall_risk_label(predicted.tolist())
+    overall_risk_level = compute_overall_risk_label(predicted_labels)
 
     return {
-        "uid": request.uid,
-        "session_id": request.session_id,
+        "uid": batch.uid,
+        "session_id": batch.session_id,
         "results": results,
-        "overall_risk_level": overall_label   # ✅ 新たに含める
+        "overall_risk_level": overall_risk_level  # ✅ 追加済み
     }
