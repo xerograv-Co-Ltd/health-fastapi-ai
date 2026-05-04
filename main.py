@@ -40,6 +40,16 @@ class MissionSampleRequest(BaseModel):
     max_pct_m: Optional[float] = 0.0
     dive_time_sec: Optional[int] = 0
 
+class RecoveryRequest(BaseModel):
+    uid: Optional[str] = None
+    session_id: Optional[str] = None
+    dive_duration_sec: Optional[int] = 0
+    max_depth_m: Optional[float] = 0.0
+    max_pct_m: Optional[float] = 0.0
+    post_hr: Optional[int] = 0
+    post_spo2: Optional[float] = 0.0
+    surface_interval_planned_min: Optional[int] = 60
+
 # --- /analyze_batch ---
 @app.post("/analyze_batch")
 def analyze_batch(batch: DiveBatchRequest):
@@ -89,6 +99,20 @@ def assess_readiness(req: PreDiveRequest):
 @app.post("/analyze")
 def analyze(req: PreDiveRequest):
     return assess_readiness(req)
+
+# --- /assess/recovery ---
+
+@app.post("/assess/recovery")
+def assess_recovery(req: RecoveryRequest):
+    engine = RuleBasedEngine()
+    return engine.evaluate_recovery(
+        dive_duration_sec=req.dive_duration_sec or 0,
+        max_depth_m=req.max_depth_m or 0.0,
+        max_pct_m=req.max_pct_m or 0.0,
+        post_hr=int(req.post_hr or 0),
+        post_spo2=req.post_spo2 or 0.0,
+        surface_interval_planned_min=req.surface_interval_planned_min or 60
+    )
 
 # --- /assess/mission ---
 

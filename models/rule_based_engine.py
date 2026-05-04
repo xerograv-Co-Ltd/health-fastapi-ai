@@ -240,3 +240,117 @@ class RuleBasedEngine:
             "sosTrigger": sos_trigger,
             "tips": tips
         }
+
+    def evaluate_recovery(
+        self,
+        dive_duration_sec: int,
+        max_depth_m: float,
+        max_pct_m: float,
+        post_hr: int,
+        post_spo2: float,
+        surface_interval_planned_min: int = 60
+    ) -> dict:
+        # --- Deco load risk (0-100) ---
+        if max_pct_m < 80:
+            deco_risk = 0.0
+        elif max_pct_m < 100:
+            deco_risk = 20.0 + (max_pct_m - 80) * 1.5
+        elif max_pct_m < 120:
+            deco_risk = 50.0 + (max_pct_m - 100) * 1.5
+        else:
+            deco_risk = 80.0
+
+        # --- Depth risk ---
+        if max_depth_m <= 20:
+            depth_risk = 0.0
+        elif max_depth_m <= 30:
+            depth_risk = 15.0
+        elif max_depth_m <= 40:
+            depth_risk = 30.0
+        else:
+            depth_risk = 50.0
+
+        # --- Duration risk ---
+        dive_duration_min = dive_duration_sec / 60
+        if dive_duration_min < 30:
+            duration_risk = 0.0
+        elif dive_duration_min < 60:
+            duration_risk = 10.0
+        else:
+            duration_risk = 25.0
+
+        # --- Post-HR risk ---
+        if post_hr <= 0:
+            hr_risk = 0.0
+        elif post_hr <= 80:
+            hr_risk = 0.0
+        elif post_hr <= 100:
+            hr_risk = 20.0 + (post_hr - 80) * 1.0
+        else:
+            hr_risk = 40.0
+
+        # --- Post-SpO2 risk ---
+        if post_spo2 <= 0:
+            spo2_risk = 0.0
+        elif post_spo2 >= 97:
+            spo2_risk = 0.0
+        elif post_spo2 >= 95:
+            spo2_risk = 15.0
+        elif post_spo2 >= 92:
+            spo2_risk = 50.0
+        else:
+            spo2_risk = 80.0
+
+        # --- Weighted recovery stress ---
+        stress = (
+            deco_risk * 0.35
+            + depth_risk * 0.20
+            + duration_risk * 0.10
+            + hr_risk * 0.20
+            + spo2_risk * 0.15
+        )
+        stress = min(100.0, stress)
+        recovery_score = max(0.0, 100.0 - stress)
+
+        # --- Deco risk summary ---
+        if max_pct_m > 120:
+            deco_risk_summary = "デコ停止義務あり。緊急医療確認を推奨"
+        elif max_pct_m > 100:
+            deco_risk_summary = "組織飽和度高。安静と水分補給を継続"
+        elif max_pct_m > 80:
+            deco_risk_summary = "軽度の窒素残留。休息推奨"
+        else:
+            deco_risk_summary = "窒素残留は正常範囲"
+
+        # --- Minimum surface interval (hours) ---
+        base_interval_h = 1.0
+        if max_depth_m > 20:
+            base_interval_h += (max_depth_m - 20) / 10 * 0.5
+        if max_pct_m > 100:
+            base_interval_h += 1.0
+        if dive_duration_min > 60:
+            base_interval_h += 0.5
+        base_interval_h = min(base_interval_h, 24.0)
+
+        # --- Recovery tips ---
+        tips = []
+        if spo2_risk > 15:
+            tips.append("血中酸素が低い。深呼吸と医療確認を")
+        if hr_risk > 20:
+            tips.append("心拍数が高い。安静にしてください")
+        if max_pct_m > 100:
+            tips.append("窒素飽和が高かった。次ダイブは余裕を持って")
+        if max_depth_m > 30:
+            tips.append("深いダイブ後。十分な水分補給と休息を")
+        if surface_interval_planned_min < int(base_interval_h * 60):
+            tips.append(f"計画インターバルが短すぎます。推奨: {base_interval_h:.1f}時間以上")
+        if not tips:
+            tips.append("回復状態良好。次ダイブへの準備ができています")
+
+        return {
+            "recoveryScore": round(recovery_score, 2),
+            "decoRiskSummary": deco_risk_summary,
+            "nextDiveMinIntervalH": round(base_interval_h, 1),
+            "stressScore": round(stress, 2),
+            "recoveryTips": tips
+        }
