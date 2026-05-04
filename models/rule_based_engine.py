@@ -131,3 +131,112 @@ class RuleBasedEngine:
             "goNoGo": go_no_go,
             "tips": tips
         }
+
+    def evaluate_mission(
+        self,
+        depth_m: float,
+        heart_rate: int,
+        oxygen_saturation: float,
+        max_pct_m: float,
+        dive_time_sec: int = 0
+    ) -> dict:
+        # --- Depth risk (0-100) ---
+        if depth_m <= 0:
+            depth_risk = 0.0
+        elif depth_m <= 20:
+            depth_risk = 0.0
+        elif depth_m <= 30:
+            depth_risk = 20.0
+        elif depth_m <= 40:
+            depth_risk = 45.0
+        else:
+            depth_risk = 70.0
+
+        # --- HR risk — diving context (higher baseline is normal) ---
+        if heart_rate <= 0:
+            hr_risk = 0.0
+        elif heart_rate < 50:
+            hr_risk = 60.0
+        elif heart_rate <= 90:
+            hr_risk = 0.0
+        elif heart_rate <= 120:
+            hr_risk = 30.0 + (heart_rate - 90) * 1.5
+        else:
+            hr_risk = 90.0
+
+        # --- SpO2 risk (tighter thresholds underwater) ---
+        if oxygen_saturation <= 0:
+            spo2_risk = 0.0
+        elif oxygen_saturation >= 97:
+            spo2_risk = 0.0
+        elif oxygen_saturation >= 95:
+            spo2_risk = 25.0
+        elif oxygen_saturation >= 92:
+            spo2_risk = 70.0
+        else:
+            spo2_risk = 100.0
+
+        # --- %M tissue saturation risk ---
+        if max_pct_m <= 0:
+            pctm_risk = 0.0
+        elif max_pct_m < 80:
+            pctm_risk = 0.0
+        elif max_pct_m < 100:
+            pctm_risk = 30.0 + (max_pct_m - 80) * 2.0
+        elif max_pct_m < 120:
+            pctm_risk = 70.0 + (max_pct_m - 100) * 1.5
+        else:
+            pctm_risk = 100.0
+
+        # --- Weighted stress ---
+        stress = (
+            depth_risk * 0.20
+            + hr_risk * 0.25
+            + spo2_risk * 0.35
+            + pctm_risk * 0.20
+        )
+        stress = min(100.0, stress)
+
+        # --- Risk level ---
+        if stress < 25:
+            level = "Low"
+        elif stress < 50:
+            level = "Moderate"
+        elif stress < 75:
+            level = "High"
+        else:
+            level = "Critical"
+
+        # --- SOS trigger ---
+        sos_trigger = (
+            (oxygen_saturation > 0 and oxygen_saturation < 90)
+            or (heart_rate > 0 and (heart_rate > 140 or heart_rate < 35))
+            or max_pct_m > 120
+            or depth_m > 60
+        )
+
+        # --- Tips ---
+        tips = []
+        if depth_risk > 40:
+            tips.append("深度が深い。浮上速度を守ってください")
+        if hr_risk > 30:
+            tips.append("心拍数異常。活動量を下げ観察を")
+        if spo2_risk > 25:
+            tips.append("SpO₂低下。即時浮上を検討してください")
+        if pctm_risk > 30:
+            tips.append("窒素飽和度上昇。NDL残量を確認してください")
+        if not tips:
+            tips.append("バイタル良好。安全なダイビングを継続")
+
+        return {
+            "stressScore": round(stress, 2),
+            "riskLevel": level,
+            "perVital": {
+                "depthRisk": round(depth_risk, 2),
+                "hrRisk": round(hr_risk, 2),
+                "spo2Risk": round(spo2_risk, 2),
+                "pctMRisk": round(pctm_risk, 2)
+            },
+            "sosTrigger": sos_trigger,
+            "tips": tips
+        }

@@ -32,6 +32,14 @@ class PreDiveRequest(BaseModel):
     skin_temp: Optional[float] = 0.0
     activity_level: Optional[float] = 0.0
 
+class MissionSampleRequest(BaseModel):
+    uid: Optional[str] = None
+    depth_m: Optional[float] = 0.0
+    heart_rate: Optional[int] = 0
+    oxygen_saturation: Optional[float] = 0.0
+    max_pct_m: Optional[float] = 0.0
+    dive_time_sec: Optional[int] = 0
+
 # --- /analyze_batch ---
 @app.post("/analyze_batch")
 def analyze_batch(batch: DiveBatchRequest):
@@ -81,6 +89,19 @@ def assess_readiness(req: PreDiveRequest):
 @app.post("/analyze")
 def analyze(req: PreDiveRequest):
     return assess_readiness(req)
+
+# --- /assess/mission ---
+
+@app.post("/assess/mission")
+def assess_mission(req: MissionSampleRequest):
+    engine = RuleBasedEngine()
+    return engine.evaluate_mission(
+        depth_m=req.depth_m or 0.0,
+        heart_rate=int(req.heart_rate or 0),
+        oxygen_saturation=req.oxygen_saturation or 0.0,
+        max_pct_m=req.max_pct_m or 0.0,
+        dive_time_sec=req.dive_time_sec or 0
+    )
 
 # --- /predict_batch ---
 @app.post("/predict_batch")
