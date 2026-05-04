@@ -26,6 +26,12 @@ class DiveBatchRequest(BaseModel):
     session_id: str
     samples: List[DiveComputerSample]
 
+class PreDiveRequest(BaseModel):
+    heart_rate: Optional[float] = 0.0
+    oxygen_saturation: Optional[float] = 0.0
+    skin_temp: Optional[float] = 0.0
+    activity_level: Optional[float] = 0.0
+
 # --- /analyze_batch ---
 @app.post("/analyze_batch")
 def analyze_batch(batch: DiveBatchRequest):
@@ -59,6 +65,22 @@ def analyze_batch(batch: DiveBatchRequest):
             "results": [],
             "error": str(e)
         }
+
+# --- /assess/readiness + /analyze (alias) ---
+
+@app.post("/assess/readiness")
+def assess_readiness(req: PreDiveRequest):
+    engine = RuleBasedEngine()
+    return engine.evaluate_readiness(
+        heart_rate=int(req.heart_rate or 0),
+        oxygen_saturation=req.oxygen_saturation or 0.0,
+        skin_temp=req.skin_temp or 0.0,
+        activity_level=req.activity_level or 0.0
+    )
+
+@app.post("/analyze")
+def analyze(req: PreDiveRequest):
+    return assess_readiness(req)
 
 # --- /predict_batch ---
 @app.post("/predict_batch")
